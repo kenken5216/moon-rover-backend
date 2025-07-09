@@ -99,6 +99,69 @@ app.get('/api/sensors/latest', (req, res) => {
   });
 });
 
+// Video streaming endpoints for Raspberry Pi camera
+let streamClients = []; // Store connected video clients
+
+// GET endpoint - Frontend requests video stream
+app.get('/api/video-stream', (req, res) => {
+  console.log('📹 Frontend requesting video stream');
+  
+  res.writeHead(200, {
+    'Content-Type': 'video/mp4',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Range',
+    'Transfer-Encoding': 'chunked'
+  });
+  
+  // Add this client to stream recipients
+  streamClients.push(res);
+  console.log(`📺 Video client connected. Total clients: ${streamClients.length}`);
+  
+  // Handle client disconnect
+  req.on('close', () => {
+    streamClients = streamClients.filter(client => client !== res);
+    console.log(`📺 Video client disconnected. Remaining: ${streamClients.length}`);
+  });
+});
+
+// POST endpoint - Raspberry Pi pushes video data
+app.post('/api/video-stream', (req, res) => {
+  console.log('📹 Receiving video data from Raspberry Pi');
+  
+  let videoData = Buffer.alloc(0);
+  
+  req.on('data', (chunk) => {
+    videoData = Buffer.concat([videoData, chunk]);
+    
+    // Broadcast video chunk to all connected clients
+    streamClients.forEach((client, index) => {
+      try {
+        client.write(chunk);
+      } catch (error) {
+        console.log(`📺 Removing disconnected client ${index}`);
+        streamClients.splice(index, 1);
+      }
+    });
+  });
+  
+  req.on('end', () => {
+    console.log(`📹 Video data chunk complete: ${videoData.length} bytes`);
+    res.status(200).json({ 
+      success: true, 
+      message: 'Video stream data received',
+      bytes: videoData.length,
+      clients: streamClients.length
+    });
+  });
+  
+  req.on('error', (error) => {
+    console.error('📹 Video stream error:', error);
+    res.status(500).json({ success: false, error: 'Video stream error' });
+  });
+});
+
 // WebSocket connection handling
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
