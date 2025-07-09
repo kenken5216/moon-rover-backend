@@ -54,6 +54,10 @@ let streamActive = false;
 const RTMP_PORT = process.env.RTMP_PORT || 1935;
 const HLS_PATH = '/tmp/hls';
 
+// Video streaming clients storage
+const videoStreamClients = new Map();
+let mjpegClients = [];
+
 // Health check endpoint
 app.get('/', (req, res) => {
   res.json({ 
@@ -109,6 +113,13 @@ app.get('/api/stream/status', (req, res) => {
     active: streamActive,
     rtmpUrl: `rtmp://${req.get('host') || 'localhost'}:${RTMP_PORT}/live/rover`,
     hlsUrl: `${req.protocol}://${req.get('host')}/api/stream/hls/rover.m3u8`,
+    videoStreamUrl: `${req.protocol}://${req.get('host')}/api/video-stream`,
+    mjpegUrl: `${req.protocol}://${req.get('host')}/api/video-mjpeg`,
+    clients: {
+      videoStream: videoStreamClients.size,
+      mjpeg: mjpegClients.length,
+      websocket: io.engine.clientsCount
+    },
     timestamp: new Date()
   });
 });
@@ -181,9 +192,114 @@ app.post('/api/stream/stop', (req, res) => {
 // Serve HLS files
 app.use('/api/stream/hls', express.static(HLS_PATH));
 
-// Simple MJPEG endpoint for fallback
-let mjpegClients = [];
+// ===== NEW VIDEO STREAMING ENDPOINTS =====
 
+// HTTP Video Stream endpoint (for clients to receive video)
+app.get('/api/video-stream', (req, res) => {
+  console.log('📹 Video stream client connected');
+  
+  res.writeHead(200, {
+    'Content-Type': 'video/mp4',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+    'Transfer-Encoding': 'chunked'
+  });
+
+  // Store client connection
+  const clientId = Date.now() + Math.random();
+  videoStreamClients.set(clientId, res);
+  
+  req.on('close', () => {
+    videoStreamClients.delete(clientId);
+    console.log(`📺 Video client disconnected. Remaining: ${videoStreamClients.size}`);
+  });
+
+  req.on('error', () => {
+    videoStreamClients.delete(clientId);
+  });
+});
+
+// Video Upload endpoint (Pi uploads video chunks here)
+app.post('/api/video-upload', (req, res) => {
+  let totalChunkSize = 0;
+  
+  req.on('data', (chunk) => {
+    totalChunkSize += chunk.length;
+    
+    // Immediately forward to all video stream clients
+    videoStreamClients.forEach((client, clientId) => {
+      try {
+        client.write(chunk);
+      } catch (error) {
+        console.log(`📺 Removing disconnected video client ${clientId}:`, error.message);
+        videoStreamClients.delete(clientId);
+      }
+    });
+  });
+  
+  req.on('end', () => {
+    res.json({ 
+      success: true, 
+      message: 'Video chunk received and forwarded',
+      clients: videoStreamClients.size,
+      chunkSize: totalChunkSize,
+      timestamp: new Date()
+    });
+  });
+
+  req.on('error', (error) => {
+    console.error('📺 Video upload error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Video upload failed' 
+    });
+  });
+});
+
+// Alternative WebM video stream
+app.get('/api/video-webm', (req, res) => {
+  console.log('📹 WebM stream client connected');
+  
+  res.writeHead(200, {
+    'Content-Type': 'video/webm',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+    'Transfer-Encoding': 'chunked'
+  });
+
+  const clientId = 'webm_' + Date.now() + Math.random();
+  videoStreamClients.set(clientId, res);
+  
+  req.on('close', () => {
+    videoStreamClients.delete(clientId);
+    console.log(`📺 WebM client disconnected. Remaining: ${videoStreamClients.size}`);
+  });
+});
+
+// WebSocket video frame broadcast
+io.on('connection', (socket) => {
+  console.log('📱 Client connected:', socket.id);
+  
+  // Send latest data immediately when client connects
+  socket.emit('sensorUpdate', latestSensorData);
+  
+  // Handle video frame from Pi via WebSocket
+  socket.on('videoFrame', (frameData) => {
+    // Broadcast video frame to all other clients
+    socket.broadcast.emit('videoFrame', frameData);
+  });
+  
+  // Handle client disconnect
+  socket.on('disconnect', () => {
+    console.log('📱 Client disconnected:', socket.id);
+  });
+});
+
+// ===== MJPEG ENDPOINTS (EXISTING) =====
+
+// Simple MJPEG endpoint for fallback
 app.get('/api/video-mjpeg', (req, res) => {
   console.log('📹 MJPEG client connected');
   
@@ -234,18 +350,7 @@ app.post('/api/video-mjpeg', (req, res) => {
   });
 });
 
-// WebSocket connection handling
-io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
-  
-  // Send latest data immediately when client connects
-  socket.emit('sensorUpdate', latestSensorData);
-  
-  // Handle client disconnect
-  socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id);
-  });
-});
+// ===== MOCK DATA GENERATION =====
 
 function generateSensorData() {
   return {
@@ -286,4 +391,6 @@ server.listen(PORT, () => {
   console.log(`🚀 Rover Backend Server running on port ${PORT}`);
   console.log(`📡 WebSocket server ready for real-time updates`);
   console.log(`🎬 RTMP streaming available on port ${RTMP_PORT}`);
+  console.log(`📹 HTTP Video streaming available at /api/video-stream`);
+  console.log(`📷 MJPEG streaming available at /api/video-mjpeg`);
 });
