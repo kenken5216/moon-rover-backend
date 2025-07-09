@@ -29,7 +29,7 @@ let latestSensorData = {
   roverId: "ROVER-001",
   lastUpdate: new Date(),
   status: "active",
-  temperature: 15.2,
+  temperature: 1120,
   humidity: 45,
   airPressure: 1013,
   batteryLevel: 78,
@@ -111,6 +111,39 @@ io.on('connection', (socket) => {
     console.log('Client disconnected:', socket.id);
   });
 });
+
+function generateSensorData() {
+  return {
+    roverId: "ROVER-001",
+    lastUpdate: new Date(),
+    status: Math.random() > 0.1 ? "active" : "warning", // Sometimes show warning
+    temperature: Math.round(1100 + Math.random() * 100), // 1100-1200
+    humidity: Math.round(40 + Math.random() * 20),       // 40-60
+    airPressure: Math.round(1000 + Math.random() * 30),  // 1000-1030
+    batteryLevel: Math.round(70 + Math.random() * 30),   // 70-100
+    gpsCoordinates: {
+      latitude: 25.033 + (Math.random() - 0.5) * 0.01,   // Small variations
+      longitude: 121.5654 + (Math.random() - 0.5) * 0.01,
+    },
+    acceleration: {
+      x: (Math.random() - 0.5) * 0.5,   // -0.25 to 0.25
+      y: (Math.random() - 0.5) * 0.5,   // -0.25 to 0.25
+      z: 9.8 + (Math.random() - 0.5) * 0.2, // Around 9.8
+    },
+    distanceSensor: Math.round(100 + Math.random() * 50), // 100-150
+    lightLevel: Math.round(400 + Math.random() * 100),    // 400-500
+    connectionStatus: "connected",
+  };
+}
+
+setInterval(() => {
+  const sensorData = generateSensorData();
+  latestSensorData = sensorData;
+  
+  // Broadcast to all connected clients
+  io.emit('sensorUpdate', sensorData);
+  console.log('📡 Broadcasting mock sensor data');
+}, 1000); // Change this to adjust update frequency
 
 // Start the server
 const PORT = process.env.PORT || 3001;
