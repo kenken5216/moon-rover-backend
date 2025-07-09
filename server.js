@@ -145,6 +145,16 @@ app.post('/api/video-stream', (req, res) => {
       }
     });
   });
+
+  // Add this test endpoint after your video-stream endpoints
+  app.get('/api/video-stream/test', (req, res) => {
+    res.json({
+      message: 'Video streaming endpoint is ready',
+      timestamp: new Date(),
+      connectedClients: streamClients.length,
+      status: 'waiting for Pi stream'
+    });
+  });
   
   req.on('end', () => {
     console.log(`📹 Video data chunk complete: ${videoData.length} bytes`);
