@@ -47,6 +47,9 @@ let latestSensorData = {
   connectionStatus: "connected",
 };
 
+// Video streaming setup
+let streamClients = []; // Store connected video clients
+
 // Health check endpoint
 app.get('/', (req, res) => {
   res.json({ 
@@ -99,8 +102,15 @@ app.get('/api/sensors/latest', (req, res) => {
   });
 });
 
-// Video streaming endpoints for Raspberry Pi camera
-let streamClients = []; // Store connected video clients
+// Video streaming test endpoint
+app.get('/api/video-stream/test', (req, res) => {
+  res.json({
+    message: 'Video streaming endpoint is ready',
+    timestamp: new Date(),
+    connectedClients: streamClients.length,
+    status: 'waiting for Pi stream'
+  });
+});
 
 // GET endpoint - Frontend requests video stream
 app.get('/api/video-stream', (req, res) => {
@@ -143,16 +153,6 @@ app.post('/api/video-stream', (req, res) => {
         console.log(`📺 Removing disconnected client ${index}`);
         streamClients.splice(index, 1);
       }
-    });
-  });
-
-  // Add this test endpoint after your video-stream endpoints
-  app.get('/api/video-stream/test', (req, res) => {
-    res.json({
-      message: 'Video streaming endpoint is ready',
-      timestamp: new Date(),
-      connectedClients: streamClients.length,
-      status: 'waiting for Pi stream'
     });
   });
   
