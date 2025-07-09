@@ -23,7 +23,7 @@ const pool = new Pool({
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // 增加限制以支援 Base64 圖像
 
 // Store latest sensor data in memory for quick access
 let latestSensorData = {
@@ -115,6 +115,7 @@ app.get('/api/stream/status', (req, res) => {
     hlsUrl: `${req.protocol}://${req.get('host')}/api/stream/hls/rover.m3u8`,
     videoStreamUrl: `${req.protocol}://${req.get('host')}/api/video-stream`,
     mjpegUrl: `${req.protocol}://${req.get('host')}/api/video-mjpeg`,
+    base64Url: `${req.protocol}://${req.get('host')}/api/video-base64`,
     clients: {
       videoStream: videoStreamClients.size,
       mjpeg: mjpegClients.length,
@@ -192,7 +193,49 @@ app.post('/api/stream/stop', (req, res) => {
 // Serve HLS files
 app.use('/api/stream/hls', express.static(HLS_PATH));
 
-// ===== NEW VIDEO STREAMING ENDPOINTS =====
+// ===== NEW BASE64 VIDEO STREAMING =====
+
+// Base64 視頻端點（Pi 上傳 Base64 圖像）
+app.post('/api/video-base64', (req, res) => {
+  try {
+    const { image, quality = 'good', timestamp } = req.body;
+    
+    if (!image) {
+      return res.status(400).json({
+        success: false,
+        error: 'No image data provided'
+      });
+    }
+    
+    console.log('📹 Received Base64 frame from Pi, broadcasting...');
+    
+    // 通過 WebSocket 廣播 Base64 圖像到所有客戶端
+    io.emit('videoFrame', {
+      data: image,
+      timestamp: timestamp || Date.now(),
+      format: 'jpeg',
+      quality: quality,
+      source: 'pi'
+    });
+    
+    res.json({ 
+      success: true, 
+      message: 'Base64 frame broadcasted via WebSocket',
+      clients: io.engine.clientsCount,
+      frameSize: image.length,
+      timestamp: new Date()
+    });
+    
+  } catch (error) {
+    console.error('📺 Base64 upload error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Base64 upload failed' 
+    });
+  }
+});
+
+// ===== VIDEO STREAMING ENDPOINTS =====
 
 // HTTP Video Stream endpoint (for clients to receive video)
 app.get('/api/video-stream', (req, res) => {
@@ -278,17 +321,32 @@ app.get('/api/video-webm', (req, res) => {
   });
 });
 
-// WebSocket video frame broadcast
+// ===== WEBSOCKET HANDLING =====
+
 io.on('connection', (socket) => {
   console.log('📱 Client connected:', socket.id);
   
   // Send latest data immediately when client connects
   socket.emit('sensorUpdate', latestSensorData);
   
-  // Handle video frame from Pi via WebSocket
+  // 處理來自 Pi 的視頻幀（WebSocket 方式）
   socket.on('videoFrame', (frameData) => {
-    // Broadcast video frame to all other clients
+    console.log('📹 Received video frame via WebSocket from Pi, broadcasting...');
+    // 廣播視頻幀到所有其他客戶端（除了發送者）
     socket.broadcast.emit('videoFrame', frameData);
+  });
+  
+  // 處理來自前端的視頻請求
+  socket.on('requestVideoStream', () => {
+    console.log('📹 Client requested video stream');
+    socket.emit('videoStreamReady', {
+      message: 'Video stream ready',
+      endpoints: {
+        base64: '/api/video-base64',
+        mjpeg: '/api/video-mjpeg',
+        mp4: '/api/video-stream'
+      }
+    });
   });
   
   // Handle client disconnect
@@ -393,4 +451,5 @@ server.listen(PORT, () => {
   console.log(`🎬 RTMP streaming available on port ${RTMP_PORT}`);
   console.log(`📹 HTTP Video streaming available at /api/video-stream`);
   console.log(`📷 MJPEG streaming available at /api/video-mjpeg`);
+  console.log(`🎯 Base64 WebSocket streaming available at /api/video-base64`);
 });
