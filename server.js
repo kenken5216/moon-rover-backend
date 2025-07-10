@@ -102,7 +102,7 @@ app.post('/api/ai/analyze-sensors', async (req, res) => {
 
     const prompt = `
       You are an expert AI Mission Control analyst for a lunar rover. Your task is to analyze the following real-time sensor data from the rover.
-      Provide a concise, professional analysis in Traditional Chinese (繁體中文).
+      Provide a concise, professional analysis in Traditional Chinese (繁體中文). You response and tone should be clean and clear, also you may use emoji for better struture.
       Your response should be formatted in Markdown and include these sections:
       - **總結 (Summary):** A brief, one-sentence overview of the rover's current status.
       - **關鍵指標分析 (Key Metrics Analysis):** Analyze critical data points like battery, temperature, and connection. Highlight any values that are concerning or noteworthy.
@@ -146,7 +146,7 @@ app.post('/api/ai/analyze-image', async (req, res) => {
         
         const prompt = `
           You are an expert in lunar geology and rover engineering. Analyze this image captured by a lunar rover's forward-facing camera.
-          Provide a concise, professional analysis in Traditional Chinese (繁體中文).
+          Provide a concise, professional analysis in Traditional Chinese (繁體中文). You response and tone should be clean and clear, also you may use emoji for better struture.
           Your response should be formatted in Markdown and include these sections:
           - **影像概述 (Image Overview):** Briefly describe what you see in the image (e.g., terrain, rocks, shadows).
           - **地質特徵 (Geological Features):** Identify any interesting rocks, soil (regolith) types, or geological formations.
