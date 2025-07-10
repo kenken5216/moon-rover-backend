@@ -90,7 +90,7 @@ app.get('/api/stream/status', (req, res) => res.json({ active: streamActive, rtm
 // ==================== 2. GEMINI AI API ENDPOINTS ====================
 
 // Endpoint to analyze sensor data
-app.post('api/ai/analyze-sensors', async (req, res) => {
+app.post('/api/ai/analyze-sensors', async (req, res) => {
   console.log('🤖 /api/ai/analyze-sensors route hit!'); // <-- LOG 1
   try {
     const { sensorData } = req.body;
