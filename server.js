@@ -46,7 +46,7 @@ let latestSensorData = {
   humidity: 0,
   airPressure: 0,
   batteryLevel: 100,
-  gpsCoordinates: { latitude: 25.033, longitude: 121.5654 },
+  gpsCoordinates: { latitude: 22.189, longitude: 114.1037 },
   acceleration: { x: 0, y: 0, z: 0 },
   distanceSensor: 0,
   lightLevel: 0,
