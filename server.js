@@ -91,11 +91,14 @@ app.get('/api/stream/status', (req, res) => res.json({ active: streamActive, rtm
 
 // Endpoint to analyze sensor data
 app.post('/api/ai/analyze-sensors', async (req, res) => {
+  console.log('🤖 /api/ai/analyze-sensors route hit!'); // <-- LOG 1
   try {
     const { sensorData } = req.body;
     if (!sensorData) {
+      console.error('❌ Error: sensorData is missing from the request body.');
       return res.status(400).json({ error: "sensorData is required" });
     }
+    console.log('📊 Received sensorData:', JSON.stringify(sensorData, null, 2)); // <-- LOG 2
 
     const prompt = `
       You are an expert AI Mission Control analyst for a lunar rover. Your task is to analyze the following real-time sensor data from the rover.
@@ -109,49 +112,63 @@ app.post('/api/ai/analyze-sensors', async (req, res) => {
       Here is the sensor data in JSON format:
       ${JSON.stringify(sensorData, null, 2)}
     `;
+    console.log('📝 Generated prompt for Gemini.'); // <-- LOG 3
 
+    console.log('🚀 Calling Gemini API...'); // <-- LOG 4
     const result = await model.generateContent(prompt);
+    console.log('✅ Gemini API call successful.'); // <-- LOG 5
+
     const response = await result.response;
     const text = response.text();
     
+    console.log('💡 Gemini Response received, sending to client.'); // <-- LOG 6
     res.json({ analysis: text });
+
   } catch (error) {
-    console.error("Error in sensor analysis:", error);
-    res.status(500).json({ error: "Failed to get analysis from AI" });
+    // This will now catch errors from the model.generateContent call
+    console.error("❌❌❌ CRITICAL ERROR in /api/ai/analyze-sensors:", error); // <-- LOG 7 (Error)
+    res.status(500).json({ error: "Failed to get analysis from AI. Check backend logs for details." });
   }
 });
 
 // Endpoint to analyze an image from the video feed
 app.post('/api/ai/analyze-image', async (req, res) => {
-  try {
-    const { imageData } = req.body; // Expects a Base64 data URL
-    if (!imageData) {
-      return res.status(400).json({ error: "imageData is required" });
+    console.log('🤖 /api/ai/analyze-image route hit!'); // <-- LOG 1
+    try {
+        const { imageData } = req.body;
+        if (!imageData) {
+            console.error('❌ Error: imageData is missing from the request body.');
+            return res.status(400).json({ error: "imageData is required" });
+        }
+        console.log('🖼️ Received imageData (first 50 chars):', imageData.substring(0, 50)); // <-- LOG 2
+
+        const imageParts = [fileToGenerativePart(imageData)];
+        
+        const prompt = `
+          You are an expert in lunar geology and rover engineering. Analyze this image captured by a lunar rover's forward-facing camera.
+          Provide a concise, professional analysis in Traditional Chinese (繁體中文).
+          Your response should be formatted in Markdown and include these sections:
+          - **影像概述 (Image Overview):** Briefly describe what you see in the image (e.g., terrain, rocks, shadows).
+          - **地質特徵 (Geological Features):** Identify any interesting rocks, soil (regolith) types, or geological formations.
+          - **潛在危險 (Potential Hazards):** Point out any potential hazards for the rover.
+          - **任務建議 (Mission Suggestions):** Based on the visual information, suggest a next step.
+        `;
+        console.log('📝 Generated prompt for Gemini Vision.'); // <-- LOG 3
+
+        console.log('🚀 Calling Gemini Vision API...'); // <-- LOG 4
+        const result = await model.generateContent([prompt, ...imageParts]);
+        console.log('✅ Gemini Vision API call successful.'); // <-- LOG 5
+
+        const response = await result.response;
+        const text = response.text();
+
+        console.log('💡 Gemini Vision Response received, sending to client.'); // <-- LOG 6
+        res.json({ analysis: text });
+
+    } catch (error) {
+        console.error("❌❌❌ CRITICAL ERROR in /api/ai/analyze-image:", error); // <-- LOG 7 (Error)
+        res.status(500).json({ error: "Failed to get analysis from AI. Check backend logs for details." });
     }
-
-    // Convert Base64 data URL to a Gemini-compatible part
-    const imageParts = [fileToGenerativePart(imageData)];
-    
-    const prompt = `
-      You are an expert in lunar geology and rover engineering. Analyze this image captured by a lunar rover's forward-facing camera.
-      Provide a concise, professional analysis in Traditional Chinese (繁體中文).
-      Your response should be formatted in Markdown and include these sections:
-      - **影像概述 (Image Overview):** Briefly describe what you see in the image (e.g., terrain, rocks, shadows).
-      - **地質特徵 (Geological Features):** Identify any interesting rocks, soil (regolith) types, or geological formations.
-      - **潛在危險 (Potential Hazards):** Point out any potential hazards for the rover, such as large rocks, steep slopes, deep shadows (which could hide obstacles), or soft sand.
-      - **任務建議 (Mission Suggestions):** Based on the visual information, suggest a next step, like "proceed with caution," "safe to proceed," or "recommend analyzing the large rock on the left."
-    `;
-
-    const result = await model.generateContent([prompt, ...imageParts]);
-    const response = await result.response;
-    const text = response.text();
-
-    res.json({ analysis: text });
-
-  } catch (error) {
-    console.error("Error in image analysis:", error);
-    res.status(500).json({ error: "Failed to get analysis from AI" });
-  }
 });
 
 // ==================== 3. HELPER FUNCTION for AI ====================
